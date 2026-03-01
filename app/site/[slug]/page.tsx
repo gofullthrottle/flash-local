@@ -50,7 +50,7 @@ export default async function MicrositePage({ params }: Props) {
   const data = await getProviderBySlug(slug);
   if (!data) notFound();
 
-  const { provider, profile, packages } = data;
+  const { provider, profile, packages, reviews } = data;
   const vertical = provider.vertical_id.replace(/-/g, " ");
   const serviceArea =
     typeof profile?.service_area === "object" &&
@@ -96,7 +96,9 @@ export default async function MicrositePage({ params }: Props) {
               </span>
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />{" "}
-                New on FlashLocal
+                {reviews.length > 0
+                  ? `${(reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1)} (${reviews.length} review${reviews.length !== 1 ? "s" : ""})`
+                  : "New on FlashLocal"}
               </span>
             </div>
             <div className="mt-8 flex justify-center gap-4">
@@ -172,6 +174,62 @@ export default async function MicrositePage({ params }: Props) {
             </div>
           </div>
         </section>
+
+        {/* Reviews */}
+        {reviews.length > 0 && (
+          <section className="border-t py-16 sm:py-20">
+            <div className="mx-auto max-w-5xl px-4">
+              <h2 className="text-center font-display text-2xl font-bold sm:text-3xl">
+                What Our Customers Say
+              </h2>
+              <div className="mt-2 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-4 w-4 ${
+                        i < Math.round(reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span>
+                  {(reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1)} from {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {reviews.map((review: any) => (
+                  <Card key={review.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-4 w-4 ${
+                              i < review.rating
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-muted-foreground/30"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      {review.body && (
+                        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                          &ldquo;{review.body}&rdquo;
+                        </p>
+                      )}
+                      <p className="mt-3 text-sm font-medium">
+                        {review.customer_name}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Trust */}
         <section className="border-t bg-muted/30 py-16">

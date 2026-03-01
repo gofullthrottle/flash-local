@@ -4,11 +4,10 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 import type { OnboardingData } from "./types";
 
-export async function createProvider(data: OnboardingData) {
+export async function createProvider(data: OnboardingData, userId?: string) {
   const supabase = createAdminClient();
   const slug = slugify(data.brand.slug || data.brand.displayName);
 
-  // Check slug uniqueness
   const { data: existing } = await supabase
     .from("providers")
     .select("id")
@@ -19,18 +18,17 @@ export async function createProvider(data: OnboardingData) {
     return { error: "This URL is already taken. Try a different business name." };
   }
 
-  // Create provider
+  const ownerUserId = userId ?? "00000000-0000-0000-0000-000000000000";
+
   const { data: provider, error: providerErr } = await supabase
     .from("providers")
     .insert({
-      status: data.plan === "REV_SHARE" ? "PENDING" : "PENDING",
+      status: "PENDING",
       plan: data.plan,
       vertical_id: data.service.verticalId,
       slug,
       display_name: data.brand.displayName,
-      // owner_user_id will be set after auth signup — for now use a placeholder
-      // In production, this comes from the auth session
-      owner_user_id: "00000000-0000-0000-0000-000000000000",
+      owner_user_id: ownerUserId,
     })
     .select("id")
     .single();
@@ -41,7 +39,6 @@ export async function createProvider(data: OnboardingData) {
 
   const providerId = provider.id;
 
-  // Create related records in parallel
   const ops = [
     supabase.from("provider_public_profiles").insert({
       provider_id: providerId,
@@ -68,7 +65,6 @@ export async function createProvider(data: OnboardingData) {
     }),
   ];
 
-  // Insert packages
   if (data.pricing.packages.length > 0) {
     ops.push(
       supabase.from("service_packages").insert(
@@ -110,5 +106,17 @@ export async function publishSite(providerId: string) {
     .update({ published: true })
     .eq("provider_id", providerId);
 
+  return { success: true };
+}
+
+export async function claimProvider(providerId: string, userId: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("providers")
+    .update({ owner_user_id: userId })
+    .eq("id", providerId)
+    .eq("owner_user_id", "00000000-0000-0000-0000-000000000000");
+
+  if (error) return { error: error.message };
   return { success: true };
 }

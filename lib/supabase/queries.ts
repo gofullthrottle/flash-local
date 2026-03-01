@@ -12,7 +12,7 @@ export async function getProviderBySlug(slug: string) {
 
   if (!provider) return null;
 
-  const [profileRes, packagesRes, siteRes] = await Promise.all([
+  const [profileRes, packagesRes, siteRes, reviewsRes] = await Promise.all([
     supabase
       .from("provider_public_profiles")
       .select("*")
@@ -31,6 +31,13 @@ export async function getProviderBySlug(slug: string) {
       .eq("provider_id", provider.id)
       .eq("is_live", true)
       .single(),
+    supabase
+      .from("reviews")
+      .select("id, customer_name, rating, body, created_at")
+      .eq("provider_id", provider.id)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(6),
   ]);
 
   if (!siteRes.data) return null;
@@ -40,5 +47,6 @@ export async function getProviderBySlug(slug: string) {
     profile: profileRes.data,
     packages: packagesRes.data ?? [],
     site: siteRes.data,
+    reviews: reviewsRes.data ?? [],
   };
 }
