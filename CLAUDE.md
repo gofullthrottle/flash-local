@@ -1,5 +1,10 @@
 # Flash Local
 
+
+## ClickUp Integration
+
+@.clickup_state.json
+
 ## Project Overview
 
 Flash Local provides companies with Google Business Profile optimization and comprehensive local SEO strategies to help them rank higher in local search results and attract more customers.

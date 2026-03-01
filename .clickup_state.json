@@ -1,0 +1,15 @@
+{
+  "space_id": "90144480593",
+  "space_name": "[AI] flash-local",
+  "team_id": "42051537",
+  "created": "2026-03-01T03:52:56.580166",
+  "git": {
+    "has_remote": true,
+    "remote_url": "git@github.com:gofullthrottle/flash-local.git",
+    "provider": "github",
+    "owner": "gofullthrottle",
+    "repo": "flash-local"
+  },
+  "settings": {},
+  "gantt_project_id": null
+}
