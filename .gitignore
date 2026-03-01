@@ -39,3 +39,26 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+### NODE ###
+node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### NEXT.JS ###
+.next/
+out/
+
+### ENV ###
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+### MISC ###
+*.tsbuildinfo
+next-env.d.ts

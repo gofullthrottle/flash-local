@@ -4,33 +4,34 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-02-24.acacia",
+  });
+}
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 type CheckoutRequest = {
   provider_id: string;
   order_kind: "SETUP_FEE" | "CUSTOMER_BOOKING";
-  // For CUSTOMER_BOOKING
   booking_id?: string;
   package_id?: string;
-  // For SETUP_FEE
   setup_tier?: "basic" | "standard" | "premium";
-  // Shared
   success_url: string;
   cancel_url: string;
 };
 
 const SETUP_FEE_PRICES: Record<string, number> = {
-  basic: 9900, // $99
-  standard: 19900, // $199
-  premium: 39900, // $399
+  basic: 9900,
+  standard: 19900,
+  premium: 39900,
 };
 
 export async function POST(req: NextRequest) {
@@ -45,13 +46,18 @@ export async function POST(req: NextRequest) {
 
   if (!provider_id || !order_kind || !success_url || !cancel_url) {
     return NextResponse.json(
-      { error: "Missing required fields: provider_id, order_kind, success_url, cancel_url" },
+      {
+        error:
+          "Missing required fields: provider_id, order_kind, success_url, cancel_url",
+      },
       { status: 400 }
     );
   }
 
-  // Fetch provider to validate existence and get plan info
-  const { data: provider, error: provErr } = await supabaseAdmin
+  const stripe = getStripe();
+  const db = getSupabaseAdmin();
+
+  const { data: provider, error: provErr } = await db
     .from("providers")
     .select("id, plan, display_name, slug, status")
     .eq("id", provider_id)
@@ -64,7 +70,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Build metadata — this is the single source of truth for all Stripe objects
   const metadata: Record<string, string> = {
     provider_id,
     plan_type: provider.plan,
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest) {
         success_url: `${success_url}?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url,
         payment_intent_data: {
-          metadata, // metadata on PI too, so webhooks can read it from either object
+          metadata,
         },
       });
 
@@ -121,8 +126,7 @@ export async function POST(req: NextRequest) {
 
       metadata.booking_id = booking_id;
 
-      // Fetch the package for price info
-      const { data: pkg, error: pkgErr } = await supabaseAdmin
+      const { data: pkg, error: pkgErr } = await db
         .from("service_packages")
         .select("name, price_cents, currency, description")
         .eq("id", package_id)
@@ -137,8 +141,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Fetch booking for deposit info
-      const { data: booking, error: bookErr } = await supabaseAdmin
+      const { data: booking, error: bookErr } = await db
         .from("bookings")
         .select("deposit_amount_cents, total_amount_cents, currency")
         .eq("id", booking_id)
@@ -151,13 +154,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Charge the deposit if set, otherwise full amount
       const chargeCents =
         booking.deposit_amount_cents > 0
           ? booking.deposit_amount_cents
           : booking.total_amount_cents;
 
-      // Build Checkout Session — optionally with Connect destination charge
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
         metadata,
@@ -181,21 +182,11 @@ export async function POST(req: NextRequest) {
         },
       };
 
-      // If rev-share, route payment through Connect
       if (provider.plan === "REV_SHARE") {
-        const { data: site } = await supabaseAdmin
-          .from("sites")
-          .select("id")
-          .eq("provider_id", provider_id)
-          .single();
-
-        // Look up the provider's connected Stripe account
-        // (stored during onboarding — for now we read from provider_contacts or a future stripe_accounts table)
-        // Placeholder: you'll wire this up when Connect onboarding is built
-        const connectedAccountId = process.env[`STRIPE_CONNECT_${provider_id}`];
+        const connectedAccountId =
+          process.env[`STRIPE_CONNECT_${provider_id}`];
 
         if (connectedAccountId) {
-          // 15% platform fee (1500 basis points) — read from provider config in production
           const applicationFeeCents = Math.round(chargeCents * 0.15);
 
           sessionParams.payment_intent_data = {
@@ -210,8 +201,7 @@ export async function POST(req: NextRequest) {
 
       const session = await stripe.checkout.sessions.create(sessionParams);
 
-      // Update order row to link checkout session
-      await supabaseAdmin.from("orders").upsert(
+      await db.from("orders").upsert(
         {
           provider_id,
           booking_id,

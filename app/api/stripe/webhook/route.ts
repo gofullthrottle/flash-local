@@ -1,18 +1,22 @@
 import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs"; // needs raw body + crypto
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-02-24.acacia",
+  });
+}
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // server-only
-  { auth: { persistSession: false } }
-);
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 function mustGetEnv(name: string): string {
   const v = process.env[name];
@@ -20,18 +24,20 @@ function mustGetEnv(name: string): string {
   return v;
 }
 
-async function alreadyProcessed(eventId: string): Promise<boolean> {
-  const { error } = await supabaseAdmin
+async function alreadyProcessed(
+  db: SupabaseClient,
+  eventId: string
+): Promise<boolean> {
+  const { error } = await db
     .from("stripe_events")
     .insert({ event_id: eventId, event_type: "UNKNOWN", payload: {} });
-  // unique violation => already processed
   if (error && (error as any).code === "23505") return true;
   if (error) throw error;
   return false;
 }
 
-async function recordEvent(event: Stripe.Event) {
-  const { error } = await supabaseAdmin
+async function recordEvent(db: SupabaseClient, event: Stripe.Event) {
+  const { error } = await db
     .from("stripe_events")
     .update({
       event_type: event.type,
@@ -60,21 +66,24 @@ function readMeta(obj: any): Meta {
   };
 }
 
-async function upsertOrder(params: {
-  provider_id: string;
-  booking_id?: string;
-  stripe_payment_intent_id?: string | null;
-  stripe_checkout_session_id?: string | null;
-  status: string;
-  amount_cents?: number;
-  currency?: string;
-  application_fee_cents?: number;
-  provider_payout_cents?: number;
-  refunded_cents?: number;
-  dispute_status?: string | null;
-  metadata?: Meta;
-  raw_last_event: any;
-}) {
+async function upsertOrder(
+  db: SupabaseClient,
+  params: {
+    provider_id: string;
+    booking_id?: string;
+    stripe_payment_intent_id?: string | null;
+    stripe_checkout_session_id?: string | null;
+    status: string;
+    amount_cents?: number;
+    currency?: string;
+    application_fee_cents?: number;
+    provider_payout_cents?: number;
+    refunded_cents?: number;
+    dispute_status?: string | null;
+    metadata?: Meta;
+    raw_last_event: any;
+  }
+) {
   const payload: any = {
     provider_id: params.provider_id,
     booking_id: params.booking_id ?? null,
@@ -91,44 +100,47 @@ async function upsertOrder(params: {
     raw_last_event: params.raw_last_event ?? {},
   };
 
-  // Prefer upsert by payment_intent_id if present, else by checkout_session_id.
   if (payload.stripe_payment_intent_id) {
-    const { error } = await supabaseAdmin.from("orders").upsert(payload, {
+    const { error } = await db.from("orders").upsert(payload, {
       onConflict: "stripe_payment_intent_id",
     });
     if (!error) return;
   }
 
   if (payload.stripe_checkout_session_id) {
-    const { error } = await supabaseAdmin.from("orders").upsert(payload, {
+    const { error } = await db.from("orders").upsert(payload, {
       onConflict: "stripe_checkout_session_id",
     });
     if (error) throw error;
     return;
   }
 
-  const { error } = await supabaseAdmin.from("orders").insert(payload);
+  const { error } = await db.from("orders").insert(payload);
   if (error) throw error;
 }
 
-async function setBookingStatus(bookingId: string, status: string) {
-  const { error } = await supabaseAdmin
+async function setBookingStatus(
+  db: SupabaseClient,
+  bookingId: string,
+  status: string
+) {
+  const { error } = await db
     .from("bookings")
     .update({ status })
     .eq("id", bookingId);
   if (error) throw error;
 }
 
-async function setProviderActive(providerId: string) {
-  const { error } = await supabaseAdmin
+async function setProviderActive(db: SupabaseClient, providerId: string) {
+  const { error } = await db
     .from("providers")
     .update({ status: "ACTIVE" })
     .eq("id", providerId);
   if (error) throw error;
 }
 
-async function setSiteLive(providerId: string) {
-  const { error } = await supabaseAdmin
+async function setSiteLive(db: SupabaseClient, providerId: string) {
+  const { error } = await db
     .from("sites")
     .update({ is_live: true, published_at: new Date().toISOString() })
     .eq("provider_id", providerId);
@@ -143,6 +155,8 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
 
+  const stripe = getStripe();
+  const db = getSupabaseAdmin();
   const webhookSecret = mustGetEnv("STRIPE_WEBHOOK_SECRET");
   const rawBody = await req.text();
 
@@ -158,9 +172,9 @@ export async function POST(req: NextRequest) {
 
   // Idempotency fence
   try {
-    const dup = await alreadyProcessed(event.id);
+    const dup = await alreadyProcessed(db, event.id);
     if (dup) return NextResponse.json({ received: true, deduped: true });
-    await recordEvent(event);
+    await recordEvent(db, event);
   } catch (e: any) {
     return NextResponse.json(
       { error: `Event store failed: ${e.message}` },
@@ -175,7 +189,7 @@ export async function POST(req: NextRequest) {
         const meta = readMeta(session);
         if (!meta.provider_id) break;
 
-        await upsertOrder({
+        await upsertOrder(db, {
           provider_id: meta.provider_id,
           booking_id: meta.booking_id,
           stripe_checkout_session_id: session.id,
@@ -194,8 +208,8 @@ export async function POST(req: NextRequest) {
         });
 
         if (meta.order_kind === "SETUP_FEE") {
-          await setProviderActive(meta.provider_id);
-          await setSiteLive(meta.provider_id);
+          await setProviderActive(db, meta.provider_id);
+          await setSiteLive(db, meta.provider_id);
         }
         break;
       }
@@ -211,7 +225,7 @@ export async function POST(req: NextRequest) {
             : (pi.amount ?? 0);
         const currency = (pi.currency ?? "usd").toUpperCase();
 
-        await upsertOrder({
+        await upsertOrder(db, {
           provider_id: meta.provider_id,
           booking_id: meta.booking_id,
           stripe_payment_intent_id: pi.id,
@@ -223,7 +237,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (meta.booking_id) {
-          await setBookingStatus(meta.booking_id, "CONFIRMED");
+          await setBookingStatus(db, meta.booking_id, "CONFIRMED");
         }
         break;
       }
@@ -233,7 +247,7 @@ export async function POST(req: NextRequest) {
         const meta = readMeta(pi);
         if (!meta.provider_id) break;
 
-        await upsertOrder({
+        await upsertOrder(db, {
           provider_id: meta.provider_id,
           booking_id: meta.booking_id,
           stripe_payment_intent_id: pi.id,
@@ -254,7 +268,7 @@ export async function POST(req: NextRequest) {
         const refunded = charge.amount_refunded ?? 0;
         const amount = charge.amount ?? 0;
 
-        await upsertOrder({
+        await upsertOrder(db, {
           provider_id: meta.provider_id,
           booking_id: meta.booking_id,
           stripe_payment_intent_id:
@@ -270,7 +284,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (meta.booking_id && refunded >= amount) {
-          await setBookingStatus(meta.booking_id, "REFUNDED");
+          await setBookingStatus(db, meta.booking_id, "REFUNDED");
         }
         break;
       }
@@ -283,7 +297,7 @@ export async function POST(req: NextRequest) {
         const meta = readMeta(charge);
         if (!meta.provider_id) break;
 
-        await upsertOrder({
+        await upsertOrder(db, {
           provider_id: meta.provider_id,
           booking_id: meta.booking_id,
           stripe_payment_intent_id:
@@ -301,13 +315,11 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        // Intentionally ignore unhandled events
         break;
     }
 
     return NextResponse.json({ received: true });
   } catch (err: any) {
-    // Return 500 so Stripe retries; idempotency table prevents double effects.
     return NextResponse.json(
       { error: `Handler failed: ${err.message}` },
       { status: 500 }
