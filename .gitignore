@@ -59,9 +59,6 @@ out/
 .env.test.local
 .env.production.local
 
-### CLAUDE ###
-.claude/plans/
-
 ### MISC ###
 *.tsbuildinfo
 next-env.d.ts
