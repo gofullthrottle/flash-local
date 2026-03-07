@@ -1,0 +1,506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flashlocal.example/schemas/flashlocal_onboarding.schema.json",
+  "title": "FlashLocal Onboarding Wizard + Vertical Packs",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["wizard", "verticalPacks"],
+  "properties": {
+    "wizard": { "$ref": "#/$defs/WizardDefinition" },
+    "verticalPacks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/VerticalPack" }
+    }
+  },
+  "$defs": {
+    "PlanType": {
+      "type": "string",
+      "enum": ["UPFRONT", "REV_SHARE"]
+    },
+    "ProviderStatus": {
+      "type": "string",
+      "enum": ["PENDING", "ACTIVE", "PAUSED", "BANNED"]
+    },
+    "Currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "examples": ["USD"]
+    },
+    "UUID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "Slug": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "ISODateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "WizardDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "steps", "routing", "dataModel", "outputArtifacts"],
+      "properties": {
+        "version": { "type": "string", "examples": ["1.0.0"] },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/WizardStep" }
+        },
+        "routing": {
+          "description": "Declarative branching. Each rule is evaluated in order; first match wins.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/RoutingRule" }
+        },
+        "dataModel": {
+          "description": "Single canonical shape your agents and UI agree on. Steps write into this model.",
+          "$ref": "#/$defs/OnboardingDataModel"
+        },
+        "outputArtifacts": {
+          "description": "What the system must produce by the end of onboarding.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/OutputArtifact" }
+        }
+      }
+    },
+    "WizardStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "fields", "actions"],
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "kind": {
+          "type": "string",
+          "enum": ["FORM", "PAYMENT", "PREVIEW", "PUBLISH", "INTEGRATION", "DONE"]
+        },
+        "description": { "type": "string", "maxLength": 800 },
+        "visibleIf": { "$ref": "#/$defs/Expression" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Field" }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/StepAction" }
+        },
+        "uiHints": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "primaryCtaLabel": { "type": "string" },
+            "secondaryCtaLabel": { "type": "string" },
+            "showProgress": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    },
+    "Field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type", "bind", "required"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "help": { "type": "string", "maxLength": 400 },
+        "type": {
+          "type": "string",
+          "enum": [
+            "TEXT",
+            "TEXTAREA",
+            "EMAIL",
+            "PHONE",
+            "URL",
+            "SLUG",
+            "NUMBER",
+            "MONEY",
+            "SELECT",
+            "MULTISELECT",
+            "TOGGLE",
+            "DATE",
+            "DATETIME",
+            "FILE",
+            "ADDRESS",
+            "JSON"
+          ]
+        },
+        "required": { "type": "boolean" },
+        "bind": {
+          "description": "JSON pointer into dataModel where this field writes.",
+          "type": "string",
+          "pattern": "^/.*"
+        },
+        "default": {},
+        "options": {
+          "description": "For SELECT/MULTISELECT.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Option" }
+        },
+        "validation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ValidationRule" }
+        },
+        "visibleIf": { "$ref": "#/$defs/Expression" },
+        "ui": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "component": { "type": "string" },
+            "placeholder": { "type": "string" },
+            "mask": { "type": "string" },
+            "maxFiles": { "type": "integer", "minimum": 1, "maximum": 50 },
+            "accept": { "type": "string" }
+          }
+        }
+      }
+    },
+    "Option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "label"],
+      "properties": {
+        "value": {},
+        "label": { "type": "string" },
+        "hint": { "type": "string" }
+      }
+    },
+    "ValidationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "MIN_LENGTH",
+            "MAX_LENGTH",
+            "REGEX",
+            "MIN",
+            "MAX",
+            "EMAIL",
+            "PHONE",
+            "URL",
+            "SLUG",
+            "REQUIRED_IF",
+            "CUSTOM_EXPRESSION"
+          ]
+        },
+        "value": {},
+        "expression": { "$ref": "#/$defs/Expression" },
+        "message": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "StepAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "SAVE_DRAFT",
+            "VALIDATE_STEP",
+            "GENERATE_SITE_DRAFT",
+            "CREATE_STRIPE_CHECKOUT",
+            "START_STRIPE_CONNECT",
+            "PUBLISH_SITE",
+            "SUBMIT_GBP_WIZARD_PROGRESS",
+            "SEND_SMS_SELF_LINK"
+          ]
+        },
+        "config": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "RoutingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when", "goToStepId"],
+      "properties": {
+        "when": { "$ref": "#/$defs/Expression" },
+        "goToStepId": { "type": "string" }
+      }
+    },
+    "Expression": {
+      "description": "Tiny expression language; evaluate against dataModel. Keep it safe (no eval).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["AND", "OR", "NOT", "EQ", "NEQ", "IN", "EXISTS", "GT", "GTE", "LT", "LTE"]
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/Expression" },
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "null" },
+              { "type": "object" },
+              { "type": "array" }
+            ]
+          }
+        }
+      }
+    },
+    "OnboardingDataModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "offer", "branding", "service", "pricing", "payments", "publishing", "googlePresence"],
+      "properties": {
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "status"],
+          "properties": {
+            "id": { "$ref": "#/$defs/UUID" },
+            "status": { "$ref": "#/$defs/ProviderStatus" },
+            "ownerUserId": { "$ref": "#/$defs/UUID" }
+          }
+        },
+        "offer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["planType"],
+          "properties": {
+            "planType": { "$ref": "#/$defs/PlanType" },
+            "setupFeeCents": { "type": "integer", "minimum": 0 },
+            "revShareBps": {
+              "description": "Basis points (e.g. 1500 = 15%). Only for REV_SHARE.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5000
+            }
+          }
+        },
+        "branding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["displayName", "slug"],
+          "properties": {
+            "displayName": { "type": "string", "minLength": 2, "maxLength": 80 },
+            "slug": { "$ref": "#/$defs/Slug" },
+            "logoUrl": { "type": "string" },
+            "heroImages": {
+              "type": "array",
+              "items": { "type": "string" },
+              "maxItems": 20
+            },
+            "phone": { "type": "string" },
+            "email": { "type": "string" }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verticalId", "serviceArea"],
+          "properties": {
+            "verticalId": { "type": "string" },
+            "serviceArea": {
+              "description": "Zip/city list or radius targeting. Keep as JSON for flexibility.",
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "cities": { "type": "array", "items": { "type": "string" } },
+                "zips": { "type": "array", "items": { "type": "string" } },
+                "radiusMiles": { "type": "integer", "minimum": 0, "maximum": 100 }
+              }
+            },
+            "timezone": { "type": "string", "default": "America/Los_Angeles" }
+          }
+        },
+        "pricing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "packages"],
+          "properties": {
+            "currency": { "$ref": "#/$defs/Currency", "default": "USD" },
+            "packages": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": { "$ref": "#/$defs/PricingPackage" }
+            },
+            "deposit": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "percent": { "type": "integer", "minimum": 0, "maximum": 100, "default": 30 }
+              }
+            }
+          }
+        },
+        "payments": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "description": "How customer payments flow.",
+              "type": "string",
+              "enum": ["DIRECT_TO_PROVIDER", "CONNECT_DESTINATION_CHARGE"]
+            },
+            "stripeConnect": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "accountId": { "type": "string" },
+                "onboardingComplete": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        },
+        "publishing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subdomain", "isLive"],
+          "properties": {
+            "subdomain": { "type": "string", "minLength": 3, "maxLength": 63 },
+            "customDomain": { "type": "string" },
+            "isLive": { "type": "boolean", "default": false }
+          }
+        },
+        "googlePresence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wizardState"],
+          "properties": {
+            "wizardState": {
+              "type": "string",
+              "enum": ["NOT_STARTED", "SEARCHING", "MATCH_FOUND", "CREATING", "VERIFYING", "LIVE", "BLOCKED"]
+            },
+            "locationResourceName": { "type": "string" },
+            "verificationNotes": { "type": "string" }
+          }
+        }
+      }
+    },
+    "PricingPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "priceCents", "description"],
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "priceCents": { "type": "integer", "minimum": 0, "maximum": 2000000 },
+        "description": { "type": "string", "maxLength": 400 },
+        "includes": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
+        "recommended": { "type": "boolean", "default": false },
+        "addOns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AddOn" },
+          "maxItems": 20
+        }
+      }
+    },
+    "AddOn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "priceCents"],
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "priceCents": { "type": "integer", "minimum": 0, "maximum": 500000 },
+        "description": { "type": "string", "maxLength": 300 }
+      }
+    },
+    "OutputArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "PROVIDER_RECORD",
+            "MICROSITE_DRAFT",
+            "MICROSITE_PUBLISHED",
+            "STRIPE_SETUP_FEE_CHECKOUT",
+            "STRIPE_CONNECT_ACCOUNT",
+            "SITEMAP_XML",
+            "GBP_WIZARD_PROGRESS"
+          ]
+        },
+        "required": { "type": "boolean", "default": true },
+        "notes": { "type": "string" }
+      }
+    },
+    "VerticalPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "category", "template", "defaults", "copyBlocks"],
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "category": { "type": "string", "examples": ["holiday"] },
+        "template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["themeId", "pageBlueprint"],
+          "properties": {
+            "themeId": { "type": "string" },
+            "pageBlueprint": {
+              "description": "Declarative sections for microsite pages.",
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["packages", "depositPercent", "faq", "policies"],
+          "properties": {
+            "packages": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/PricingPackage" },
+              "minItems": 1
+            },
+            "depositPercent": { "type": "integer", "minimum": 0, "maximum": 100, "default": 30 },
+            "faq": { "type": "array", "items": { "$ref": "#/$defs/FaqItem" }, "maxItems": 25 },
+            "policies": { "type": "array", "items": { "$ref": "#/$defs/PolicyItem" }, "maxItems": 25 }
+          }
+        },
+        "copyBlocks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heroHeadline", "heroSubhead", "trustBullets"],
+          "properties": {
+            "heroHeadline": { "type": "string", "maxLength": 120 },
+            "heroSubhead": { "type": "string", "maxLength": 220 },
+            "trustBullets": { "type": "array", "items": { "type": "string" }, "maxItems": 8 },
+            "seoTitleTemplate": { "type": "string", "maxLength": 80 },
+            "seoDescriptionTemplate": { "type": "string", "maxLength": 160 }
+          }
+        }
+      }
+    },
+    "FaqItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["q", "a"],
+      "properties": {
+        "q": { "type": "string", "maxLength": 140 },
+        "a": { "type": "string", "maxLength": 400 }
+      }
+    },
+    "PolicyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "properties": {
+        "title": { "type": "string", "maxLength": 80 },
+        "body": { "type": "string", "maxLength": 600 }
+      }
+    }
+  }
+}
