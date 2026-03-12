@@ -40,6 +40,10 @@ flash-local/
 ├── .sonarqube/
 │   ├── sonar-dev.properties     # SonarQube config for dev branch
 │   └── sonar-prod.properties    # SonarQube config for master branch
+├── e2e/                         # Playwright E2E tests
+│   ├── playwright.config.ts     #   Test config (viewports, webServer)
+│   ├── screenshots/             #   Captured screenshots (committed to git)
+│   └── tests/                   #   Test specs (public/, dashboard/)
 ├── docs/
 │   ├── README.md                # Fumadocs documentation setup
 │   └── architecture/
@@ -62,6 +66,7 @@ flash-local/
 - **Database/Auth**: Supabase (Postgres + Auth + Storage + RLS)
 - **Payments**: Stripe (Checkout, Billing, Connect Express)
 - **Documentation**: Fumadocs
+- **E2E Testing**: Playwright (desktop + mobile viewports, screenshot capture)
 - **Code Quality**: SonarQube (self-hosted), pre-commit hooks
 - **CI/CD**: GitHub Actions (self-hosted runners)
 - **DNS/CDN**: Cloudflare (wildcard subdomains, WAF, caching)
@@ -175,6 +180,45 @@ Each provider gets a subdomain (`<slug>.flashlocal.com`) or optional custom doma
 - Service-area updates can take ~48 hours
 - Never create fake businesses, fake addresses, or keyword-stuff business names
 - A compliance linter agent flags suspicious patterns
+
+## E2E Testing
+
+Playwright-based E2E integration tests with automatic screenshot capture. Screenshots serve as both regression baselines and stakeholder-ready visual documentation.
+
+### Commands
+
+```bash
+npm run test:e2e              # Run all tests (desktop + mobile)
+npm run test:e2e:ui           # Interactive UI mode
+npm run test:e2e:screenshots  # Update baseline snapshots
+```
+
+### Structure
+
+- **Config**: `e2e/playwright.config.ts` — desktop (1280x720) + mobile (390x844) viewports, auto-starts `next dev`
+- **Tests**: `e2e/tests/{public,dashboard}/` — organized by flow
+- **Screenshots**: `e2e/screenshots/` — committed to git (stakeholder artifacts)
+- **Reports**: `e2e/playwright-report/` and `e2e/test-results/` — gitignored runtime artifacts
+
+### Test Coverage
+
+| Flow | Tests | Key Validations |
+|------|-------|-----------------|
+| Landing | `public/landing.spec.ts` | Hero, CTAs, pricing, nav, verticals |
+| Auth | `public/auth.spec.ts` | Login/signup forms, branding, cross-links |
+| Onboarding | `public/onboarding.spec.ts` | Wizard steps, plan pre-selection via query params |
+| Microsite | `public/microsite.spec.ts` | Provider profile rendering, 404 state |
+| Booking | `public/booking.spec.ts` | Form fields, secure badge, success confirmation |
+| Reviews | `public/review.spec.ts` | Star rating, form validation, interactive feedback |
+| Dashboard | `dashboard/overview.spec.ts` | Auth redirect, unauthenticated state capture |
+| Dashboard Pages | `dashboard/pages.spec.ts` | All 7 sub-pages: bookings, orders, reviews, connect, site, settings, ads |
+
+### Guidelines
+
+- Tests should work without a running Supabase/Stripe backend (pages render their shell/loading states)
+- Screenshots are captured on EVERY test, not just failures
+- `e2e/screenshots/` is tracked in git — do NOT add it to `.gitignore`
+- Install browsers before first run: `npx playwright install`
 
 ## Documentation
 

@@ -59,6 +59,10 @@ out/
 .env.test.local
 .env.production.local
 
+### PLAYWRIGHT ###
+e2e/test-results/
+e2e/playwright-report/
+
 ### MISC ###
 *.tsbuildinfo
 next-env.d.ts
