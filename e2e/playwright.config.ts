@@ -12,7 +12,7 @@ export default defineConfig({
   ],
   outputDir: 'test-results',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://localhost:3100',
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'off',
@@ -28,14 +28,14 @@ export default defineConfig({
     {
       name: 'mobile',
       use: {
-        ...devices['iPhone 14'],
-        viewport: { width: 390, height: 844 },
+        ...devices['Pixel 7'],
+        viewport: { width: 412, height: 915 },
       },
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: 'npx next dev --port 3100',
+    url: process.env.BASE_URL || 'http://localhost:3100',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

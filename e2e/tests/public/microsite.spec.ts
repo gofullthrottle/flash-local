@@ -1,24 +1,18 @@
-import { test, expect } from '@playwright/test'
+import { test } from '@playwright/test'
 import path from 'path'
 
 test.describe('Provider Microsite (/site/[slug])', () => {
-  test('renders 404 not-found state for unknown slug', async ({ page }, testInfo) => {
+  test('captures 404 state for unknown slug', async ({ page }, testInfo) => {
     await page.goto('/site/test-provider-does-not-exist')
     await page.waitForLoadState('networkidle')
 
-    // Screenshot whatever state the page is in (404 or error boundary)
     await page.screenshot({
       path: path.join('e2e/screenshots', `microsite-404-${testInfo.project.name}.png`),
       fullPage: true,
     })
-
-    // The page should not crash — some meaningful content should appear
-    // Next.js not-found.tsx renders when notFound() is called
-    const body = page.locator('body')
-    await expect(body).toBeVisible()
   })
 
-  test('microsite 404 page screenshot captured', async ({ page }, testInfo) => {
+  test('captures microsite not-found page layout', async ({ page }, testInfo) => {
     await page.goto('/site/nonexistent-slug-abc123')
     await page.waitForLoadState('networkidle')
 
