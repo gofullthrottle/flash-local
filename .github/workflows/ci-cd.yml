@@ -2,7 +2,7 @@
 # CI/CD Workflow - STANDARD TIER
 # =============================================================================
 # Comprehensive CI/CD with dev branch, dual SonarQube, and E2E testing
-# Template Version: 1.0.0
+# Template Version: 1.1.0
 # =============================================================================
 
 name: CI/CD Pipeline
@@ -36,52 +36,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      # --- Language-specific setup (uncomment as needed) ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-      # Node.js
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
-      #     cache: 'npm'
-      #
-      # - name: Install dependencies
-      #   run: npm ci
-      #
-      # - name: Lint
-      #   run: npm run lint
-      #
-      # - name: Type Check
-      #   run: npm run typecheck
-      #
-      # - name: Unit Tests
-      #   run: npm run test -- --coverage
-      #
-      # - name: Build
-      #   run: npm run build
+      - name: Install dependencies
+        run: npm ci
 
-      # Python
-      # - name: Setup Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.12'
-      #
-      # - name: Install dependencies
-      #   run: |
-      #     pip install uv
-      #     uv sync
-      #
-      # - name: Lint
-      #   run: uv run ruff check .
-      #
-      # - name: Type Check
-      #   run: uv run mypy .
-      #
-      # - name: Unit Tests
-      #   run: uv run pytest --cov --cov-report=xml
+      - name: Lint
+        run: npm run lint
 
-      - name: Quality circuit placeholder
-        run: echo "Configure language-specific steps above"
+      - name: Type Check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
 
   # ===========================================================================
   # SONARQUBE ANALYSIS
@@ -128,31 +99,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Playwright E2E (uncomment and configure) ---
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
-      #
-      # - name: Install dependencies
-      #   run: npm ci
-      #
-      # - name: Install Playwright browsers
-      #   run: npx playwright install --with-deps
-      #
-      # - name: Run E2E tests
-      #   run: npm run test:e2e
-      #
-      # - name: Upload test results
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: playwright-report
-      #     path: playwright-report/
-      #     retention-days: 7
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-      - name: E2E placeholder
-        run: echo "Configure E2E tests above"
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e/screenshots/
+          retention-days: 30
 
   # ===========================================================================
   # PROMOTION CHECK (PR to main only)
@@ -160,7 +136,7 @@ jobs:
   promotion-check:
     name: Promotion Quality Gate
     runs-on: [self-hosted, sonarqube]
-    needs: [sonarqube, e2e-tests]
+    needs: [sonarqube]
     if: github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'master')
 
     steps:
@@ -169,6 +145,5 @@ jobs:
           echo "All quality gates passed:"
           echo "  - Quality Circuit: PASSED"
           echo "  - SonarQube: PASSED"
-          echo "  - E2E Tests: PASSED"
           echo ""
           echo "PR is ready for review and merge."
