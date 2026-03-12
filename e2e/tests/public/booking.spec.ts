@@ -23,9 +23,6 @@ test.describe('Booking Page (/site/[slug]/book)', () => {
     // These fields are rendered client-side unconditionally
     const nameInput = page.getByLabel('Full name')
     const emailInput = page.getByLabel('Email')
-    const phoneInput = page.getByLabel('Phone')
-    const addressInput = page.getByLabel(/Service address/i)
-
     // At least some form fields should be present
     const nameVisible = await nameInput.isVisible().catch(() => false)
     const emailVisible = await emailInput.isVisible().catch(() => false)
