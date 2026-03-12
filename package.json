@@ -10,7 +10,10 @@
     "type-check": "tsc --noEmit",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts",
     "test:e2e:ui": "playwright test --config=e2e/playwright.config.ts --ui",
-    "test:e2e:screenshots": "playwright test --config=e2e/playwright.config.ts --update-snapshots"
+    "test:e2e:screenshots": "playwright test --config=e2e/playwright.config.ts --update-snapshots",
+    "release": "standard-version",
+    "release:first": "standard-version --first-release",
+    "release:dry": "standard-version --dry-run"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.2",
@@ -47,6 +50,7 @@
     "eslint": "^9.16.0",
     "eslint-config-next": "15.1.0",
     "postcss": "^8.4.49",
+    "standard-version": "^9.5.0",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "vitest": "^4.0.18"
