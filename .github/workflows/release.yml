@@ -1,0 +1,65 @@
+name: Automated Release
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: [self-hosted, sonarqube]
+
+    # Skip if this is a release commit (prevent infinite loop)
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for releasable commits
+        id: check
+        run: |
+          if git describe --tags --abbrev=0 2>/dev/null; then
+            LAST_TAG=$(git describe --tags --abbrev=0)
+            COMMITS=$(git log $LAST_TAG..HEAD --oneline --grep="^feat" --grep="^fix" --grep="^feat!" --grep="^fix!" --grep="BREAKING CHANGE" -E)
+          else
+            COMMITS=$(git log --oneline --grep="^feat" --grep="^fix" --grep="^feat!" --grep="^fix!" --grep="BREAKING CHANGE" -E)
+          fi
+
+          if [ -n "$COMMITS" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Found releasable commits:"
+            echo "$COMMITS"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No releasable commits found (no feat/fix commits)"
+          fi
+
+      - name: Create release
+        if: steps.check.outputs.has_changes == 'true'
+        run: npm run release
+
+      - name: Push changes
+        if: steps.check.outputs.has_changes == 'true'
+        run: git push --follow-tags origin HEAD
