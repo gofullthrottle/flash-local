@@ -15,13 +15,85 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getProviderForCurrentUser } from "@/lib/auth/session";
+import {
+  getDashboardStats,
+  getRecentBookings,
+} from "@/lib/dashboard/queries";
+import { createServerClient } from "@/lib/supabase/server";
 
-export default function DashboardOverview() {
+function formatCurrency(cents: number) {
+  return `$${(cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export default async function DashboardOverview() {
+  const provider = await getProviderForCurrentUser();
+
+  if (!provider) {
+    return (
+      <div className="space-y-6">
+        <h2 className="font-display text-2xl font-bold tracking-tight">
+          Welcome
+        </h2>
+        <p className="text-muted-foreground">
+          Finish setting up your business to see your dashboard.{" "}
+          <Link href="/start" className="underline">
+            Start onboarding
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
+  const [stats, recentBookings, reviewsCountRes] = await Promise.all([
+    getDashboardStats(provider.id),
+    getRecentBookings(provider.id, 3),
+    createServerClient()
+      .from("reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("provider_id", provider.id)
+      .eq("is_published", true),
+  ]);
+
+  const site = Array.isArray(provider.sites) ? provider.sites[0] : provider.sites;
+  const siteStatus = site?.is_live ? "Live" : "Pending";
+  const reviewsCount = reviewsCountRes.count ?? 0;
+
+  const statCards = [
+    {
+      title: "Total Revenue",
+      value: formatCurrency(stats.totalRevenueCents),
+      sub: "All time",
+      icon: DollarSign,
+    },
+    {
+      title: "Bookings",
+      value: String(stats.thisMonth),
+      sub: "This month",
+      icon: CalendarDays,
+    },
+    {
+      title: "Pending",
+      value: String(stats.pending),
+      sub: "Awaiting confirmation",
+      icon: CreditCard,
+    },
+    {
+      title: "Conversion",
+      value: `${stats.conversion}%`,
+      sub: "Requested → confirmed",
+      icon: TrendingUp,
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="font-display text-2xl font-bold tracking-tight">
-          Welcome back
+          Welcome back, {provider.display_name}
         </h2>
         <p className="text-muted-foreground">
           Here's what's happening with your business today.
@@ -30,32 +102,7 @@ export default function DashboardOverview() {
 
       {/* Stats grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            title: "Total Revenue",
-            value: "$0.00",
-            sub: "All time",
-            icon: DollarSign,
-          },
-          {
-            title: "Bookings",
-            value: "0",
-            sub: "This month",
-            icon: CalendarDays,
-          },
-          {
-            title: "Pending",
-            value: "0",
-            sub: "Awaiting confirmation",
-            icon: CreditCard,
-          },
-          {
-            title: "Conversion",
-            value: "0%",
-            sub: "Leads → bookings",
-            icon: TrendingUp,
-          },
-        ].map((stat) => (
+        {statCards.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -76,12 +123,34 @@ export default function DashboardOverview() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Recent Bookings</CardTitle>
-            <CardDescription>No bookings yet</CardDescription>
+            <CardDescription>
+              {recentBookings.length === 0
+                ? "No bookings yet"
+                : `${recentBookings.length} recent booking${recentBookings.length === 1 ? "" : "s"}`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Bookings will appear here once customers start booking through your site.
-            </p>
+            {recentBookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Bookings will appear here once customers start booking through
+                your site.
+              </p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {recentBookings.map((b: any) => {
+                  const customer =
+                    b.customer_snapshot?.name ?? "Customer";
+                  return (
+                    <li key={b.id} className="flex justify-between">
+                      <span className="truncate">{customer}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {b.status}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <Button variant="outline" size="sm" className="mt-4" asChild>
               <Link href="/dashboard/bookings">
                 View all <ArrowRight className="ml-2 h-3 w-3" />
@@ -94,12 +163,16 @@ export default function DashboardOverview() {
           <CardHeader>
             <CardTitle className="text-base">Site Status</CardTitle>
             <CardDescription>
-              <Badge variant="secondary">Pending</Badge>
+              <Badge variant={siteStatus === "Live" ? "default" : "secondary"}>
+                {siteStatus}
+              </Badge>
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Complete your setup to go live and start accepting customers.
+              {siteStatus === "Live"
+                ? `Your site is live at ${provider.slug}.flashlocal.com`
+                : "Complete your setup to go live and start accepting customers."}
             </p>
             <Button variant="outline" size="sm" className="mt-4" asChild>
               <Link href="/dashboard/site">
@@ -113,7 +186,7 @@ export default function DashboardOverview() {
           <CardHeader>
             <CardTitle className="text-base">Reviews</CardTitle>
             <CardDescription>
-              0 reviews collected
+              {reviewsCount} review{reviewsCount === 1 ? "" : "s"} collected
             </CardDescription>
           </CardHeader>
           <CardContent>
