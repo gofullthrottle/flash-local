@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendReviewRequest } from "@/lib/email/send";
 
 export const runtime = "nodejs";
 
@@ -104,8 +105,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // In production: trigger email/SMS sending here via a queue or direct call
-  // For now, mark as SENT and return the token (for demo/testing)
+  // Fetch provider display name for the email copy
+  const { data: providerInfo } = await db
+    .from("providers")
+    .select("display_name")
+    .eq("id", provider_id)
+    .single();
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://flashlocal.com";
+  const reviewUrl = `${appUrl}/review/${reviewReq.token}`;
+
+  // Send the email. If email isn't configured, still mark as SENT so the
+  // flow works in dev — the review link can be copied from the response.
+  const emailResult = await sendReviewRequest({
+    to: snapshot.email,
+    customerName:
+      (booking.customer_snapshot as any)?.name ?? "Customer",
+    providerName: providerInfo?.display_name ?? "your provider",
+    reviewUrl,
+  });
+
   await db
     .from("review_requests")
     .update({ status: "SENT", sent_at: new Date().toISOString() })
@@ -115,5 +134,6 @@ export async function POST(req: NextRequest) {
     request_id: reviewReq.id,
     token: reviewReq.token,
     review_url: `/review/${reviewReq.token}`,
+    email_sent: emailResult.sent,
   });
 }

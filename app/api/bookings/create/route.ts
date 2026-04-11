@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  sendBookingConfirmation,
+  sendNewBookingAlert,
+} from "@/lib/email/send";
 
 export const runtime = "nodejs";
 
@@ -119,6 +123,48 @@ export async function POST(req: NextRequest) {
       { error: `Booking creation failed: ${bookErr.message}` },
       { status: 500 }
     );
+  }
+
+  // Fire-and-forget emails — errors don't block the booking flow
+  try {
+    const { data: providerInfo } = await db
+      .from("providers")
+      .select("display_name, slug, provider_contacts(email)")
+      .eq("id", provider_id)
+      .single();
+
+    const providerContactEmail = Array.isArray(providerInfo?.provider_contacts)
+      ? (providerInfo?.provider_contacts as any)[0]?.email
+      : (providerInfo?.provider_contacts as any)?.email;
+    const providerName = providerInfo?.display_name ?? "your provider";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://flashlocal.com";
+
+    // Customer confirmation
+    await sendBookingConfirmation({
+      to: customer_email,
+      customerName: customer_name,
+      providerName,
+      packageName: pkg.name,
+      scheduledDate: scheduled_date || null,
+      address,
+      depositAmountCents: depositCents,
+      totalAmountCents: pkg.price_cents,
+    });
+
+    // Provider alert
+    if (providerContactEmail) {
+      await sendNewBookingAlert({
+        to: providerContactEmail,
+        providerName,
+        customerName: customer_name,
+        packageName: pkg.name,
+        scheduledDate: scheduled_date || null,
+        totalAmountCents: pkg.price_cents,
+        dashboardUrl: `${appUrl}/dashboard/bookings`,
+      });
+    }
+  } catch (e) {
+    console.error("[bookings/create] email failure", e);
   }
 
   return NextResponse.json({
