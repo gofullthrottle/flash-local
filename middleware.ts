@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createServerClient,
+  type CookieOptions,
+} from "@supabase/ssr";
 
 const SITE_DOMAIN = process.env.NEXT_PUBLIC_SITE_DOMAIN ?? "flashlocal.com";
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const host = req.headers.get("host") ?? "";
   const url = req.nextUrl.clone();
 
-  // Skip API routes and static files
-  if (
+  // Skip API routes and static files (but still allow auth refresh to run)
+  const isApiOrStatic =
     url.pathname.startsWith("/api") ||
     url.pathname.startsWith("/_next") ||
-    url.pathname.startsWith("/favicon")
-  ) {
-    return NextResponse.next();
-  }
+    url.pathname.startsWith("/favicon");
 
-  // Tenant routing: <slug>.flashlocal.com → /site/<slug>/*
-  // In local dev, use ?tenant=<slug> query param as fallback
+  // --- Tenant routing (subdomain → /site/<slug>/*) ---
   const hostParts = host.split(".");
   const isSubdomain =
     hostParts.length > 2 ||
@@ -26,26 +26,97 @@ export function middleware(req: NextRequest) {
 
   if (isSubdomain) {
     const sub = hostParts[0];
-    // Ignore www
     if (sub !== "www") {
       tenantSlug = sub;
     }
   }
 
-  // Dev fallback: ?tenant=slug
   if (!tenantSlug && url.searchParams.has("tenant")) {
     tenantSlug = url.searchParams.get("tenant");
   }
 
-  // If tenant detected and not already on /site/* path, rewrite
-  if (tenantSlug && !url.pathname.startsWith("/site/")) {
+  if (
+    !isApiOrStatic &&
+    tenantSlug &&
+    !url.pathname.startsWith("/site/")
+  ) {
     url.pathname = `/site/${tenantSlug}${url.pathname}`;
     return NextResponse.rewrite(url);
   }
 
-  return NextResponse.next();
+  // Skip auth refresh for API routes and static files
+  if (isApiOrStatic) {
+    return NextResponse.next();
+  }
+
+  // --- Auth session refresh + route guards ---
+  let response = NextResponse.next({ request: req });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options: CookieOptions;
+          }[]
+        ) {
+          cookiesToSet.forEach(({ name, value }: { name: string; value: string }) =>
+            req.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request: req });
+          cookiesToSet.forEach(
+            ({
+              name,
+              value,
+              options,
+            }: {
+              name: string;
+              value: string;
+              options: CookieOptions;
+            }) => response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // Refresh the session (required for SSR cookie-based auth)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Guard protected routes
+  const protectedPrefixes = ["/dashboard", "/start"];
+  const isProtected = protectedPrefixes.some((p) =>
+    url.pathname.startsWith(p)
+  );
+
+  if (isProtected && !user) {
+    const loginUrl = url.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("redirect", url.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization)
+     * - favicon.ico, robots.txt, sitemap.xml
+     * - public image extensions
+     */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

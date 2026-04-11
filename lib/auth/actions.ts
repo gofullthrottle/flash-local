@@ -1,25 +1,12 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { redirect } from "next/navigation";
+import { createServerClient, createAdminClient } from "@/lib/supabase/server";
 
-export async function signUp(email: string, password: string) {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (error) return { error: error.message };
-  return { userId: data.user.id };
-}
-
-export async function getSession() {
-  const supabase = createAdminClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session;
+export async function signOut() {
+  const supabase = createServerClient();
+  await supabase.auth.signOut();
+  redirect("/");
 }
 
 export async function getProviderForUser(userId: string) {
