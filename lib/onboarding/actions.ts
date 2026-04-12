@@ -1,8 +1,24 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { createAdminClient, getCurrentUser } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 import type { OnboardingData } from "./types";
+
+async function resolveReferralAttribution(supabase: ReturnType<typeof createAdminClient>) {
+  const cookieStore = await cookies();
+  const refCode = cookieStore.get("fl_ref")?.value;
+  if (!refCode) return { repId: null, refCode: null };
+
+  const { data: rep } = await supabase
+    .from("sales_reps")
+    .select("id")
+    .eq("referral_code", refCode)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  return { repId: rep?.id ?? null, refCode };
+}
 
 export async function createProvider(data: OnboardingData) {
   const user = await getCurrentUser();
@@ -34,15 +50,21 @@ export async function createProvider(data: OnboardingData) {
     return { providerId: existingOwned.id, slug: existingOwned.slug };
   }
 
+  // Resolve referral attribution from cookie
+  const { repId, refCode } = await resolveReferralAttribution(supabase);
+
   const { data: provider, error: providerErr } = await supabase
     .from("providers")
     .insert({
       status: "PENDING",
       plan: data.plan,
+      tier: data.tier ?? "STARTER",
       vertical_id: data.service.verticalId,
       slug,
       display_name: data.brand.displayName,
       owner_user_id: user.id,
+      referred_by_rep_id: repId,
+      referral_code_used: refCode,
     })
     .select("id")
     .single();
