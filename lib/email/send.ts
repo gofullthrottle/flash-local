@@ -172,6 +172,44 @@ export async function sendReviewRequest(params: {
   );
 }
 
+export async function sendClaimInvitation(params: {
+  to: string;
+  businessName: string;
+  ownerName: string;
+  repName: string;
+  claimUrl: string;
+  expiresInDays: number;
+}) {
+  const html = `
+    <div style="${baseStyle()}">
+      ${brandHeader()}
+      <h1 style="font-size: 22px; margin-top: 0;">Your business page is ready 🎉</h1>
+      <p>Hi ${params.ownerName},</p>
+      <p><strong>${params.repName}</strong> (FlashLocal sales rep) set up a
+         professional bookable page for <strong>${params.businessName}</strong>
+         and is holding it for you.</p>
+      <p>Claim your account to take ownership — it takes 60 seconds.
+         Once you claim it, you can customize the page, connect payments,
+         and start taking bookings.</p>
+      ${button(params.claimUrl, "Claim My Business Page")}
+      <p style="color: #666; font-size: 13px;">
+        This link expires in ${params.expiresInDays} days. If you didn't expect
+        this, you can safely ignore it — nothing was created in your name without
+        a signup.
+      </p>
+      <p style="margin-top: 32px; color: #666; font-size: 12px;">
+        Powered by Flash Local
+      </p>
+    </div>
+  `;
+
+  return send(
+    params.to,
+    `Claim your ${params.businessName} business page`,
+    html
+  );
+}
+
 export async function sendWelcome(params: {
   to: string;
   displayName?: string;

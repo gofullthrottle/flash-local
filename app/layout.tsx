@@ -28,7 +28,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#0f172a" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+        <link rel="apple-touch-icon" href="/icons/icon.svg" />
       </head>
       <body className="min-h-screen font-sans antialiased">
         {children}

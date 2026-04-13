@@ -4,6 +4,7 @@ import {
   DollarSign,
   LayoutDashboard,
   MapPin,
+  Search,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -15,6 +16,7 @@ const REP_NAV_ITEMS = [
   { href: "/rep", label: "Overview", icon: LayoutDashboard },
   { href: "/rep/prospects", label: "Prospects", icon: Users },
   { href: "/rep/scout", label: "Scout", icon: Compass },
+  { href: "/rep/lead-sources", label: "Lead Sources", icon: Search },
   { href: "/rep/enroll", label: "Enroll Business", icon: UserPlus },
   { href: "/rep/earnings", label: "Earnings", icon: DollarSign },
 ];

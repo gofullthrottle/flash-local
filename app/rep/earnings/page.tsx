@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSalesRepForCurrentUser, getRepStats } from "@/lib/auth/rep-session";
 import { createServerClient } from "@/lib/supabase/server";
 import { formatCents } from "@/lib/utils";
+import { ConnectOnboardButton } from "./connect-button";
 
 export default async function EarningsPage() {
   const rep = await getSalesRepForCurrentUser();
@@ -62,9 +63,7 @@ export default async function EarningsPage() {
             <p className="text-sm text-muted-foreground">
               Connect your Stripe account to receive commission payouts.
             </p>
-            <button className="mt-3 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground">
-              Connect Stripe
-            </button>
+            <ConnectOnboardButton />
           </div>
         )}
       </div>

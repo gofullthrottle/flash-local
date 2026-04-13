@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useGeolocation } from "@/lib/hooks/use-geolocation";
 
 const QUICK_VERTICALS = [
@@ -43,6 +43,39 @@ export function ProspectCaptureForm({
   const [notes, setNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [estimatedValue, setEstimatedValue] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [territoryWarning, setTerritoryWarning] = useState<string | null>(null);
+
+  // Check territory whenever postal code changes (debounced)
+  useEffect(() => {
+    if (!postalCode || postalCode.length < 3) {
+      setTerritoryWarning(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/rep/territory-check?postal_code=${encodeURIComponent(postalCode)}`,
+          { signal: ctrl.signal }
+        );
+        const data = await res.json();
+        if (data.assigned && !data.in_territory) {
+          setTerritoryWarning(
+            `Postal code ${postalCode} is assigned to ${data.owned_by_rep_name ?? "another rep"}. Attribution may be reviewed.`
+          );
+        } else {
+          setTerritoryWarning(null);
+        }
+      } catch {
+        // Ignore (abort or network)
+      }
+    }, 500);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [postalCode]);
 
   const resetForm = useCallback(() => {
     setBusinessName("");
@@ -53,6 +86,8 @@ export function ProspectCaptureForm({
     setNotes("");
     setFollowUpDate("");
     setEstimatedValue("");
+    setPostalCode("");
+    setTerritoryWarning(null);
     setError(null);
   }, []);
 
@@ -91,6 +126,7 @@ export function ProspectCaptureForm({
         captured_lat: lat,
         captured_lng: lng,
         scout_session_id: scoutSessionId ?? undefined,
+        address: postalCode ? { postal_code: postalCode } : undefined,
       };
 
       const res = await fetch("/api/rep/prospects", {
@@ -235,6 +271,18 @@ export function ProspectCaptureForm({
             placeholder="Email"
             className="w-full rounded-lg border bg-background px-4 py-3 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
+          <input
+            type="text"
+            value={postalCode}
+            onChange={(e) => setPostalCode(e.target.value)}
+            placeholder="Postal code (for territory check)"
+            className="w-full rounded-lg border bg-background px-4 py-3 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          {territoryWarning && (
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-2 text-xs text-yellow-900">
+              {territoryWarning}
+            </div>
+          )}
         </div>
       </details>
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
+import { sendClaimInvitation } from "@/lib/email/send";
 
 function getSupabaseAdmin() {
   return createClient(
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   // Verify the user is a sales rep
   const { data: rep } = await db
     .from("sales_reps")
-    .select("id, referral_code")
+    .select("id, referral_code, display_name")
     .eq("user_id", user.id)
     .eq("is_active", true)
     .single();
@@ -173,16 +174,63 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // TODO: Send claim email to owner_email with magic link
-  // For now, claimProvider() in lib/onboarding/actions.ts handles the claim flow
+  // Create a claim record with a signed token
+  const { data: claim, error: claimErr } = await db
+    .from("provider_claims")
+    .insert({
+      provider_id: providerId,
+      email: body.owner_email.trim(),
+      enrolled_by_rep_id: rep.id,
+    })
+    .select("token, expires_at")
+    .single();
 
-  const claimUrl = `/claim/${providerId}`;
+  if (claimErr || !claim) {
+    // Non-fatal: provider was created. Surface but don't roll back.
+    return NextResponse.json(
+      {
+        provider_id: providerId,
+        slug,
+        warning: "Provider created but claim token failed",
+      },
+      { status: 201 }
+    );
+  }
+
+  // Send claim invitation email
+  const origin =
+    req.headers.get("origin") ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    "https://flashlocal.com";
+  const claimUrl = `${origin}/claim/${claim.token}`;
+
+  try {
+    const emailResult = await sendClaimInvitation({
+      to: body.owner_email.trim(),
+      businessName: body.business_name.trim(),
+      ownerName: body.owner_name.trim(),
+      repName: rep.display_name,
+      claimUrl,
+      expiresInDays: 30,
+    });
+
+    if (emailResult.sent) {
+      await db
+        .from("provider_claims")
+        .update({ email_sent_at: new Date().toISOString() })
+        .eq("token", claim.token);
+    }
+  } catch {
+    // Non-fatal — claim token is still valid, rep can resend
+  }
 
   return NextResponse.json(
     {
       provider_id: providerId,
       slug,
       claim_url: claimUrl,
+      claim_token: claim.token,
+      expires_at: claim.expires_at,
     },
     { status: 201 }
   );
