@@ -27,35 +27,69 @@ export function StepPayments({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleContinue() {
-    // If provider already created, just advance
-    if (providerId) {
-      onNext();
-      return;
-    }
+  const isUpfront = data.plan === "UPFRONT";
 
+  async function handleContinue() {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await createProvider(data);
-      if ("error" in result && result.error) {
-        setError(result.error);
-        return;
-      }
-      if (result.providerId) {
+      // Create provider (idempotent — returns existing if user already has one)
+      let currentProviderId: string | null = providerId;
+      if (!currentProviderId) {
+        const result = await createProvider(data);
+        if ("error" in result && result.error) {
+          setError(result.error);
+          return;
+        }
+        if (!("providerId" in result) || !result.providerId) {
+          setError("Failed to create provider");
+          return;
+        }
+        currentProviderId = result.providerId;
         setProviderId(result.providerId);
         updateData({ payments: { setupComplete: true } });
-        onNext();
       }
+
+      // For UPFRONT plan, redirect to Stripe Checkout for the setup fee.
+      // The webhook handler will flip the provider to ACTIVE on success.
+      if (isUpfront) {
+        const origin = window.location.origin;
+        const checkoutRes = await fetch("/api/checkout/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider_id: currentProviderId,
+            order_kind: "SETUP_FEE",
+            setup_tier: "basic",
+            success_url: `${origin}/start?paid=1`,
+            cancel_url: `${origin}/start?canceled=1`,
+          }),
+        });
+
+        if (!checkoutRes.ok) {
+          const err = await checkoutRes.json();
+          setError(err.error ?? "Failed to create checkout session");
+          return;
+        }
+
+        const { url } = await checkoutRes.json();
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+        setError("Checkout URL missing");
+        return;
+      }
+
+      // For REV_SHARE, skip payment and go straight to preview
+      onNext();
     } catch (e: any) {
       setError(e.message ?? "Something went wrong");
     } finally {
       setLoading(false);
     }
   }
-
-  const isUpfront = data.plan === "UPFRONT";
 
   return (
     <div>

@@ -127,8 +127,9 @@ export default function HomePage() {
                 ))}
               </div>
               <span>
-                <strong className="text-foreground">120+</strong> seasonal crews
-                launched this month
+                Built for the{" "}
+                <strong className="text-foreground">2026 season</strong> — local
+                crews welcome
               </span>
             </div>
           </div>

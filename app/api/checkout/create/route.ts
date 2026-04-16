@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
 
   const { data: provider, error: provErr } = await db
     .from("providers")
-    .select("id, plan, display_name, slug, status")
+    .select(
+      "id, plan, display_name, slug, status, stripe_account_id, stripe_onboarding_complete"
+    )
     .eq("id", provider_id)
     .single();
 
@@ -183,10 +185,13 @@ export async function POST(req: NextRequest) {
       };
 
       if (provider.plan === "REV_SHARE") {
-        const connectedAccountId =
-          process.env[`STRIPE_CONNECT_${provider_id}`];
+        // Look up the provider's Stripe Connect account from the DB.
+        // Only route with application fee + destination if onboarding is complete.
+        const connectedAccountId = provider.stripe_account_id;
+        const connectReady =
+          connectedAccountId && provider.stripe_onboarding_complete;
 
-        if (connectedAccountId) {
+        if (connectReady) {
           const applicationFeeCents = Math.round(chargeCents * 0.15);
 
           sessionParams.payment_intent_data = {
@@ -197,6 +202,8 @@ export async function POST(req: NextRequest) {
             },
           };
         }
+        // If Connect isn't ready, payment still processes on the platform account
+        // and held funds can be reconciled once onboarding completes.
       }
 
       const session = await stripe.checkout.sessions.create(sessionParams);

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import {
   CalendarDays,
@@ -9,6 +11,9 @@ import {
   Settings,
   Star,
 } from "lucide-react";
+import { requireUser } from "@/lib/auth/session";
+import { signOut } from "@/lib/auth/actions";
+import { MobileNav } from "./mobile-nav";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -21,11 +26,14 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Guard: middleware also enforces this, but double-check server-side
+  await requireUser();
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -49,26 +57,28 @@ export default function DashboardLayout({
             ))}
           </nav>
           <div className="border-t p-4">
-            <Link
-              href="/login"
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Sign out
-            </Link>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       </aside>
 
-      {/* Mobile header */}
+      {/* Mobile header + main */}
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b px-4 lg:px-8">
           <div className="flex items-center gap-4">
+            <MobileNav items={NAV_ITEMS} />
             <Link href="/" className="font-display text-lg font-bold lg:hidden">
               Flash<span className="text-primary/70">Local</span>
             </Link>
             <h1 className="hidden text-lg font-semibold lg:block">Dashboard</h1>
           </div>
-          {/* Mobile nav could go here */}
         </header>
         <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
       </div>
