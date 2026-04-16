@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getProviderForCurrentUser } from "@/lib/auth/session";
 import { getAllBookings } from "@/lib/dashboard/queries";
 import { BookingsContent, type DashboardBooking } from "./bookings-content";

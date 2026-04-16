@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getProviderForCurrentUser } from "@/lib/auth/session";
 import { getReviewsData } from "@/lib/dashboard/queries";
 import { ReviewsContent } from "./reviews-content";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {

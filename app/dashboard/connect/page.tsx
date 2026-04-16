@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Suspense } from "react";
 import { getProviderForCurrentUser } from "@/lib/auth/session";
 import ConnectContent from "./connect-content";

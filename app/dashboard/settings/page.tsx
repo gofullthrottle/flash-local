@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getProviderForCurrentUser } from "@/lib/auth/session";
 import { SettingsContent } from "./settings-content";
 
