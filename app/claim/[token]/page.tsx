@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { createAdminClient, getCurrentUser } from "@/lib/supabase/server";
 import { ClaimActions } from "./claim-actions";

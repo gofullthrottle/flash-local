@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { getSalesRepForCurrentUser, getRepStats } from "@/lib/auth/rep-session";
 import { createServerClient } from "@/lib/supabase/server";

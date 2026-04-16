@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { createServerClient, getCurrentUser } from "@/lib/supabase/server";
 import { TerritoryManager } from "./territory-manager";

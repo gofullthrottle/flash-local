@@ -141,15 +141,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Update rep stats
-  await db
-    .from("sales_reps")
-    .update({
-      total_signups: (rep as any).total_signups
-        ? (rep as any).total_signups + 1
-        : 1,
-    })
-    .eq("id", rep.id);
+  // Update rep stats atomically via RPC (avoids read-modify-write race)
+  await db.rpc("increment_rep_signups", { rep_id_param: rep.id }).then(() => {}).catch(() => {
+    // Non-fatal — counter will drift but enrollment succeeded
+  });
 
   // If the business was captured from a prospect, link it
   if (body.captured_lat != null && body.captured_lng != null) {

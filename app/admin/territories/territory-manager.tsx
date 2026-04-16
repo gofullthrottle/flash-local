@@ -37,6 +37,7 @@ export function TerritoryManager({ initialTerritories, reps }: Props) {
   const [region, setRegion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const assign = async () => {
     const codes = postalCodes
@@ -78,7 +79,7 @@ export function TerritoryManager({ initialTerritories, reps }: Props) {
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Remove this territory assignment?")) return;
+    setRemoveError(null);
     try {
       const res = await fetch(`/api/admin/territories?id=${id}`, {
         method: "DELETE",
@@ -86,7 +87,8 @@ export function TerritoryManager({ initialTerritories, reps }: Props) {
       if (!res.ok) throw new Error("Delete failed");
       router.refresh();
     } catch {
-      alert("Failed to remove");
+      setRemoveError("Failed to remove territory. Please try again.");
+      setTimeout(() => setRemoveError(null), 4000);
     }
   };
 
@@ -158,6 +160,11 @@ export function TerritoryManager({ initialTerritories, reps }: Props) {
       {/* Current assignments */}
       <div>
         <h2 className="mb-4 text-lg font-semibold">Current Assignments</h2>
+        {removeError && (
+          <div className="mb-3 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+            {removeError}
+          </div>
+        )}
         {initialTerritories.length === 0 ? (
           <div className="rounded-lg border bg-muted/30 p-8 text-center">
             <p className="text-muted-foreground">No territories assigned yet.</p>

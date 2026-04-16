@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Compass, DollarSign, TrendingUp, UserPlus, Users } from "lucide-react";

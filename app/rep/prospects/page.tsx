@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { getSalesRepForCurrentUser } from "@/lib/auth/rep-session";
 import { ProspectCaptureForm } from "@/components/rep/prospect-capture-form";

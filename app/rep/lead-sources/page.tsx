@@ -42,6 +42,8 @@ export default function LeadSourcesPage() {
   const [results, setResults] = useState<ScoredPlace[]>([]);
   const [cached, setCached] = useState(false);
   const [mockMode, setMockMode] = useState(false);
+  const [capturedId, setCapturedId] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   const runScan = async (q: string, vert?: string) => {
     setQuery(q);
@@ -97,8 +99,10 @@ export default function LeadSourcesPage() {
   };
 
   const captureAsProspect = async (place: ScoredPlace) => {
+    setCapturedId(null);
+    setCaptureError(null);
     try {
-      await fetch("/api/rep/prospects", {
+      const res = await fetch("/api/rep/prospects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -110,10 +114,15 @@ export default function LeadSourcesPage() {
           captured_lng: position?.lng,
         }),
       });
-      // Visual feedback
-      alert(`${place.name} captured as prospect!`);
-    } catch {
-      alert("Failed to capture — try again.");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Capture failed");
+      }
+      setCapturedId(place.place_id);
+      setTimeout(() => setCapturedId(null), 3000);
+    } catch (err: unknown) {
+      setCaptureError(err instanceof Error ? err.message : "Failed to capture — try again.");
+      setTimeout(() => setCaptureError(null), 4000);
     }
   };
 
@@ -196,6 +205,12 @@ export default function LeadSourcesPage() {
         </div>
       )}
 
+      {captureError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {captureError}
+        </div>
+      )}
+
       {results.length > 0 && (
         <div>
           <p className="mb-3 text-sm text-muted-foreground">
@@ -241,9 +256,13 @@ export default function LeadSourcesPage() {
                   </div>
                   <button
                     onClick={() => captureAsProspect(r)}
-                    className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      capturedId === r.place_id
+                        ? "bg-green-500 text-white"
+                        : "bg-primary text-primary-foreground"
+                    }`}
                   >
-                    + Prospect
+                    {capturedId === r.place_id ? "Captured!" : "+ Prospect"}
                   </button>
                 </div>
               </div>

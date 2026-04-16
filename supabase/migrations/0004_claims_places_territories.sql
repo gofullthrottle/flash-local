@@ -120,4 +120,15 @@ begin
    where id = rep_id_param;
 end $$;
 
+-- Increment a rep's total_signups counter atomically (used by enroll API)
+create or replace function public.increment_rep_signups(
+  rep_id_param uuid
+)
+returns void language plpgsql as $$
+begin
+  update public.sales_reps
+     set total_signups = total_signups + 1
+   where id = rep_id_param;
+end $$;
+
 commit;
