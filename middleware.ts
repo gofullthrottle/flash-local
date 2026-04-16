@@ -92,8 +92,20 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // --- Capture referral code into cookie ---
+  const refCode = url.searchParams.get("ref");
+  if (refCode && !req.cookies.get("fl_ref")) {
+    response.cookies.set("fl_ref", refCode, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    });
+  }
+
   // Guard protected routes
-  const protectedPrefixes = ["/dashboard", "/start"];
+  const protectedPrefixes = ["/dashboard", "/start", "/rep"];
   const isProtected = protectedPrefixes.some((p) =>
     url.pathname.startsWith(p)
   );

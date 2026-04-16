@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable icon: content stays within safe zone (center 80%) -->
+  <rect width="512" height="512" fill="#0f172a"/>
+  <g transform="translate(256 256)">
+    <path d="M -30 -90 L 30 -30 L 0 -15 L 38 60 L -22 15 L 8 0 L -38 -75 Z"
+          fill="#fbbf24"
+          stroke="#f59e0b"
+          stroke-width="3"/>
+    <circle cx="0" cy="98" r="12" fill="#6366f1"/>
+    <path d="M 0 68 L -15 98 L 15 98 Z" fill="#6366f1"/>
+  </g>
+</svg>

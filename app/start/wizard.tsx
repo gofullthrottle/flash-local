@@ -9,6 +9,7 @@ import {
   INITIAL_DATA,
 } from "@/lib/onboarding/types";
 import { StepPlan } from "./steps/step-plan";
+import { StepTier } from "./steps/step-tier";
 import { StepService } from "./steps/step-service";
 import { StepBrand } from "./steps/step-brand";
 import { StepPricing } from "./steps/step-pricing";
@@ -18,6 +19,7 @@ import { StepGoogle } from "./steps/step-google";
 
 const STEPS: WizardStepId[] = [
   "plan",
+  "tier",
   "service",
   "brand",
   "pricing",
@@ -28,6 +30,7 @@ const STEPS: WizardStepId[] = [
 
 const STEP_LABELS: Record<WizardStepId, string> = {
   plan: "Choose Plan",
+  tier: "Choose Tier",
   service: "Service Type",
   brand: "Your Brand",
   pricing: "Pricing",
@@ -72,7 +75,7 @@ export function StartWizard() {
 
   const [hydrated, setHydrated] = useState(false);
   const [currentStep, setCurrentStep] = useState<WizardStepId>(
-    preselectedPlan ? "service" : "plan"
+    preselectedPlan ? "tier" : "plan"
   );
   const [data, setData] = useState<OnboardingData>(() => ({
     ...INITIAL_DATA,
@@ -147,6 +150,14 @@ export function StartWizard() {
       {/* Step content */}
       {currentStep === "plan" && (
         <StepPlan data={data} updateData={updateData} onNext={goNext} />
+      )}
+      {currentStep === "tier" && (
+        <StepTier
+          data={data}
+          updateData={updateData}
+          onNext={goNext}
+          onBack={goBack}
+        />
       )}
       {currentStep === "service" && (
         <StepService
