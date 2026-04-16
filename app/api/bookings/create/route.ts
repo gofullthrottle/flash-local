@@ -162,6 +162,10 @@ export async function POST(req: NextRequest) {
         totalAmountCents: pkg.price_cents,
         dashboardUrl: `${appUrl}/dashboard/bookings`,
       });
+    } else {
+      console.warn(
+        `[bookings/create] no provider contact email found for provider_id=${provider_id}; new booking alert not sent`
+      );
     }
   } catch (e) {
     console.error("[bookings/create] email failure", e);

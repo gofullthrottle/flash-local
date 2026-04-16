@@ -151,7 +151,8 @@ export async function updateBookingStatus(
   const owner = Array.isArray(booking.providers)
     ? booking.providers[0]?.owner_user_id
     : (booking.providers as any)?.owner_user_id;
-  if (owner !== user.id) return { error: "Not authorized" };
+  // Guard against undefined owner — treat missing join result as unauthorized
+  if (!owner || owner !== user.id) return { error: "Not authorized" };
 
   const { error } = await supabase
     .from("bookings")
