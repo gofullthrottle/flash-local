@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -22,24 +22,53 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-export default function ConnectContent() {
+interface ConnectContentProps {
+  providerId: string;
+  plan: string;
+  initialStatus: {
+    connected: boolean;
+    onboarding_complete: boolean;
+  };
+}
+
+export default function ConnectContent({
+  providerId,
+  plan,
+  initialStatus,
+}: ConnectContentProps) {
   const searchParams = useSearchParams();
   const justReturned = searchParams.get("success") === "true";
   const needsRefresh = searchParams.get("refresh") === "true";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // In production, fetch from /api/connect/status on mount
   const [status, setStatus] = useState({
-    connected: false,
-    onboarding_complete: false,
+    connected: initialStatus.connected,
+    onboarding_complete: initialStatus.onboarding_complete,
     payouts_enabled: false,
     charges_enabled: false,
   });
 
-  // Simulate a returned state for demo
-  const isOnboarded = justReturned || status.onboarding_complete;
+  // Refresh status from server when the user returns from Stripe
+  useEffect(() => {
+    if (justReturned) {
+      fetch(`/api/connect/status?provider_id=${providerId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && !data.error) {
+            setStatus({
+              connected: data.connected ?? false,
+              onboarding_complete: data.onboarding_complete ?? false,
+              payouts_enabled: data.payouts_enabled ?? false,
+              charges_enabled: data.charges_enabled ?? false,
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [justReturned, providerId]);
+
+  const isOnboarded = status.onboarding_complete;
 
   async function handleOnboard() {
     setLoading(true);
@@ -50,7 +79,7 @@ export default function ConnectContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider_id: "", // In production, from auth context
+          provider_id: providerId,
         }),
       });
 

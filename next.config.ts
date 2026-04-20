@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        "flashlocal.com",
+        "www.flashlocal.com",
+        "*.flashlocal.com",
+        "localhost:3000",
+      ],
+    },
+  },
 };
 
 export default nextConfig;

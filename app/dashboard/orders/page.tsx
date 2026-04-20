@@ -1,32 +1,31 @@
-"use client";
+export const dynamic = "force-dynamic";
 
 import { CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getProviderForCurrentUser } from "@/lib/auth/session";
+import { getAllOrders } from "@/lib/dashboard/queries";
 
-type OrderStatus = "CREATED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REFUNDED" | "DISPUTED";
+type OrderStatus =
+  | "CREATED"
+  | "REQUIRES_PAYMENT_METHOD"
+  | "PROCESSING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "REFUNDED"
+  | "DISPUTED";
 
-interface Order {
-  id: string;
-  bookingId: string | null;
-  customerName: string;
-  amountCents: number;
-  feeCents: number;
-  payoutCents: number;
-  refundedCents: number;
-  status: OrderStatus;
-  stripePaymentIntentId: string;
-  createdAt: string;
-}
-
-const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
+const STATUS_VARIANT: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
   CREATED: "outline",
+  REQUIRES_PAYMENT_METHOD: "outline",
   PROCESSING: "secondary",
   SUCCEEDED: "default",
   FAILED: "destructive",
@@ -35,42 +34,59 @@ const STATUS_VARIANT: Record<OrderStatus, "default" | "secondary" | "destructive
 };
 
 function formatCents(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(cents / 100);
 }
 
-const DEMO_ORDERS: Order[] = [
-  {
-    id: "ord_1",
-    bookingId: "1",
-    customerName: "Sarah Johnson",
-    amountCents: 11970,
-    feeCents: 1796,
-    payoutCents: 10174,
-    refundedCents: 0,
-    status: "SUCCEEDED",
-    stripePaymentIntentId: "pi_demo_001",
-    createdAt: "2026-03-01T10:05:00Z",
-  },
-  {
-    id: "ord_2",
-    bookingId: "2",
-    customerName: "Mike Chen",
-    amountCents: 23970,
-    feeCents: 3596,
-    payoutCents: 20374,
-    refundedCents: 0,
-    status: "PROCESSING",
-    stripePaymentIntentId: "pi_demo_002",
-    createdAt: "2026-02-28T14:35:00Z",
-  },
-];
+export default async function OrdersPage() {
+  const provider = await getProviderForCurrentUser();
+  if (!provider) {
+    return (
+      <div className="space-y-6">
+        <h2 className="font-display text-2xl font-bold tracking-tight">
+          Orders
+        </h2>
+        <p className="text-muted-foreground">
+          Complete onboarding to start receiving orders.
+        </p>
+      </div>
+    );
+  }
 
-export default function OrdersPage() {
+  const rawOrders = await getAllOrders(provider.id);
+
+  const orders = rawOrders.map((o: any) => {
+    const booking = Array.isArray(o.bookings) ? o.bookings[0] : o.bookings;
+    const snap = booking?.customer_snapshot ?? {};
+    return {
+      id: o.id,
+      bookingId: o.booking_id,
+      customerName: snap.name ?? "Customer",
+      amountCents: o.amount_cents ?? 0,
+      feeCents: o.application_fee_cents ?? 0,
+      payoutCents: o.provider_payout_cents ?? 0,
+      refundedCents: o.refunded_cents ?? 0,
+      status: o.status as OrderStatus,
+      stripePaymentIntentId: o.stripe_payment_intent_id ?? "",
+      createdAt: o.created_at,
+    };
+  });
+
+  const totalCollected = orders.reduce((s, o) => s + o.amountCents, 0);
+  const totalFees = orders.reduce((s, o) => s + o.feeCents, 0);
+  const totalPayouts = orders.reduce((s, o) => s + o.payoutCents, 0);
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-display text-2xl font-bold tracking-tight">Orders</h2>
-        <p className="text-muted-foreground">Payment history and transaction details.</p>
+        <h2 className="font-display text-2xl font-bold tracking-tight">
+          Orders
+        </h2>
+        <p className="text-muted-foreground">
+          Payment history and transaction details.
+        </p>
       </div>
 
       {/* Summary */}
@@ -83,7 +99,7 @@ export default function OrdersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCents(DEMO_ORDERS.reduce((s, o) => s + o.amountCents, 0))}
+              {formatCents(totalCollected)}
             </div>
           </CardContent>
         </Card>
@@ -94,9 +110,7 @@ export default function OrdersPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCents(DEMO_ORDERS.reduce((s, o) => s + o.feeCents, 0))}
-            </div>
+            <div className="text-2xl font-bold">{formatCents(totalFees)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -107,7 +121,7 @@ export default function OrdersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCents(DEMO_ORDERS.reduce((s, o) => s + o.payoutCents, 0))}
+              {formatCents(totalPayouts)}
             </div>
           </CardContent>
         </Card>
@@ -119,39 +133,50 @@ export default function OrdersPage() {
           <CardTitle className="text-base">Transaction History</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {DEMO_ORDERS.map((order) => (
-              <div
-                key={order.id}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                    <CreditCard className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <div className="font-medium">{order.customerName}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString()}
+          {orders.length === 0 ? (
+            <div className="py-12 text-center">
+              <CreditCard className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="mt-4 text-sm text-muted-foreground">
+                No orders yet. Customer payments will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{order.customerName}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="font-semibold">{formatCents(order.amountCents)}</div>
-                    {order.feeCents > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        -{formatCents(order.feeCents)} fee
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="font-semibold">
+                        {formatCents(order.amountCents)}
                       </div>
-                    )}
+                      {order.feeCents > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          -{formatCents(order.feeCents)} fee
+                        </div>
+                      )}
+                    </div>
+                    <Badge variant={STATUS_VARIANT[order.status] ?? "outline"}>
+                      {order.status}
+                    </Badge>
                   </div>
-                  <Badge variant={STATUS_VARIANT[order.status]}>
-                    {order.status}
-                  </Badge>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

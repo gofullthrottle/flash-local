@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -9,6 +9,7 @@ import {
   INITIAL_DATA,
 } from "@/lib/onboarding/types";
 import { StepPlan } from "./steps/step-plan";
+import { StepTier } from "./steps/step-tier";
 import { StepService } from "./steps/step-service";
 import { StepBrand } from "./steps/step-brand";
 import { StepPricing } from "./steps/step-pricing";
@@ -18,6 +19,7 @@ import { StepGoogle } from "./steps/step-google";
 
 const STEPS: WizardStepId[] = [
   "plan",
+  "tier",
   "service",
   "brand",
   "pricing",
@@ -28,6 +30,7 @@ const STEPS: WizardStepId[] = [
 
 const STEP_LABELS: Record<WizardStepId, string> = {
   plan: "Choose Plan",
+  tier: "Choose Tier",
   service: "Service Type",
   brand: "Your Brand",
   pricing: "Pricing",
@@ -36,12 +39,43 @@ const STEP_LABELS: Record<WizardStepId, string> = {
   google: "Google Presence",
 };
 
+const STORAGE_KEY = "flashlocal_wizard_state";
+
+type PersistedState = {
+  currentStep: WizardStepId;
+  data: OnboardingData;
+  providerId: string | null;
+};
+
+function loadPersisted(): PersistedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedState;
+  } catch {
+    return null;
+  }
+}
+
+function savePersisted(state: PersistedState) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* noop */
+  }
+}
+
 export function StartWizard() {
   const searchParams = useSearchParams();
   const preselectedPlan = searchParams.get("plan");
+  const paid = searchParams.get("paid");
+  const canceled = searchParams.get("canceled");
 
+  const [hydrated, setHydrated] = useState(false);
   const [currentStep, setCurrentStep] = useState<WizardStepId>(
-    preselectedPlan ? "service" : "plan"
+    preselectedPlan ? "tier" : "plan"
   );
   const [data, setData] = useState<OnboardingData>(() => ({
     ...INITIAL_DATA,
@@ -53,6 +87,31 @@ export function StartWizard() {
           : null,
   }));
   const [providerId, setProviderId] = useState<string | null>(null);
+
+  // Hydrate from sessionStorage on mount
+  useEffect(() => {
+    const persisted = loadPersisted();
+    if (persisted) {
+      setCurrentStep(persisted.currentStep);
+      setData(persisted.data);
+      setProviderId(persisted.providerId);
+    }
+    // If returning from successful Stripe Checkout, jump to preview
+    if (paid === "1") {
+      setCurrentStep("preview");
+    }
+    // If Stripe canceled, stay on payments
+    if (canceled === "1") {
+      setCurrentStep("payments");
+    }
+    setHydrated(true);
+  }, [paid, canceled]);
+
+  // Persist changes
+  useEffect(() => {
+    if (!hydrated) return;
+    savePersisted({ currentStep, data, providerId });
+  }, [hydrated, currentStep, data, providerId]);
 
   const stepIndex = STEPS.indexOf(currentStep);
   const progress = ((stepIndex + 1) / STEPS.length) * 100;
@@ -91,6 +150,14 @@ export function StartWizard() {
       {/* Step content */}
       {currentStep === "plan" && (
         <StepPlan data={data} updateData={updateData} onNext={goNext} />
+      )}
+      {currentStep === "tier" && (
+        <StepTier
+          data={data}
+          updateData={updateData}
+          onNext={goNext}
+          onBack={goBack}
+        />
       )}
       {currentStep === "service" && (
         <StepService

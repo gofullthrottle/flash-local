@@ -1,10 +1,31 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createAdminClient, getCurrentUser } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 import type { OnboardingData } from "./types";
 
-export async function createProvider(data: OnboardingData, userId?: string) {
+async function resolveReferralAttribution(supabase: ReturnType<typeof createAdminClient>) {
+  const cookieStore = await cookies();
+  const refCode = cookieStore.get("fl_ref")?.value;
+  if (!refCode) return { repId: null, refCode: null };
+
+  const { data: rep } = await supabase
+    .from("sales_reps")
+    .select("id")
+    .eq("referral_code", refCode)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  return { repId: rep?.id ?? null, refCode };
+}
+
+export async function createProvider(data: OnboardingData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "You must be logged in to create a provider." };
+  }
+
   const supabase = createAdminClient();
   const slug = slugify(data.brand.slug || data.brand.displayName);
 
@@ -12,23 +33,38 @@ export async function createProvider(data: OnboardingData, userId?: string) {
     .from("providers")
     .select("id")
     .eq("slug", slug)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     return { error: "This URL is already taken. Try a different business name." };
   }
 
-  const ownerUserId = userId ?? "00000000-0000-0000-0000-000000000000";
+  // Check if the user already has a provider — if so, return it instead of creating a duplicate
+  const { data: existingOwned } = await supabase
+    .from("providers")
+    .select("id, slug")
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (existingOwned) {
+    return { providerId: existingOwned.id, slug: existingOwned.slug };
+  }
+
+  // Resolve referral attribution from cookie
+  const { repId, refCode } = await resolveReferralAttribution(supabase);
 
   const { data: provider, error: providerErr } = await supabase
     .from("providers")
     .insert({
       status: "PENDING",
       plan: data.plan,
+      tier: data.tier ?? "STARTER",
       vertical_id: data.service.verticalId,
       slug,
       display_name: data.brand.displayName,
-      owner_user_id: ownerUserId,
+      owner_user_id: user.id,
+      referred_by_rep_id: repId,
+      referral_code_used: refCode,
     })
     .select("id")
     .single();
@@ -90,7 +126,23 @@ export async function createProvider(data: OnboardingData, userId?: string) {
 }
 
 export async function publishSite(providerId: string) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "You must be logged in to publish." };
+  }
+
   const supabase = createAdminClient();
+
+  // Verify ownership
+  const { data: provider } = await supabase
+    .from("providers")
+    .select("id, plan, owner_user_id")
+    .eq("id", providerId)
+    .single();
+
+  if (!provider || provider.owner_user_id !== user.id) {
+    return { error: "Provider not found or not owned by you." };
+  }
 
   const { error } = await supabase
     .from("sites")
@@ -105,6 +157,15 @@ export async function publishSite(providerId: string) {
     .from("provider_public_profiles")
     .update({ published: true })
     .eq("provider_id", providerId);
+
+  // REV_SHARE providers activate immediately on publish.
+  // UPFRONT providers stay PENDING until the SETUP_FEE webhook fires on successful payment.
+  if (provider.plan === "REV_SHARE") {
+    await supabase
+      .from("providers")
+      .update({ status: "ACTIVE" })
+      .eq("id", providerId);
+  }
 
   return { success: true };
 }

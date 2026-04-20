@@ -147,6 +147,63 @@ async function setSiteLive(db: SupabaseClient, providerId: string) {
   if (error) throw error;
 }
 
+async function mintBookingCommission(
+  db: SupabaseClient,
+  providerId: string,
+  paymentIntentId: string,
+  amountCents: number
+) {
+  // Check if this provider was referred by a sales rep
+  const { data: provider } = await db
+    .from("providers")
+    .select("referred_by_rep_id, tier")
+    .eq("id", providerId)
+    .single();
+
+  if (!provider?.referred_by_rep_id) return;
+
+  // Look up commission rate from plan tier definitions
+  const { data: tierDef } = await db
+    .from("plan_tier_definitions")
+    .select("commission_pct")
+    .eq("tier", provider.tier ?? "STARTER")
+    .single();
+
+  const commissionPct = tierDef?.commission_pct ?? 15;
+
+  // Calculate platform's share first (application_fee), then rep's cut of that
+  // Platform takes 15% of total. Rep gets commission_pct of the platform's 15%.
+  const platformFeeCents = Math.round(amountCents * 0.15);
+  const repCommissionCents = Math.round(platformFeeCents * (commissionPct / 100));
+
+  if (repCommissionCents <= 0) return;
+
+  const idempotencyKey = `booking-revenue:${paymentIntentId}`;
+
+  // Insert commission (idempotent via unique constraint on idempotency_key)
+  await db.from("rep_commissions").upsert(
+    {
+      rep_id: provider.referred_by_rep_id,
+      provider_id: providerId,
+      trigger_event: "BOOKING_REVENUE",
+      gross_amount_cents: amountCents,
+      commission_pct: commissionPct,
+      commission_cents: repCommissionCents,
+      status: "PENDING",
+      idempotency_key: idempotencyKey,
+    },
+    { onConflict: "idempotency_key" }
+  );
+
+  // Update rep lifetime earnings
+  await db.rpc("increment_rep_earnings", {
+    rep_id_param: provider.referred_by_rep_id,
+    amount_param: repCommissionCents,
+  }).then(() => {}).catch(() => {
+    // Non-fatal — earnings will be recalculated from ledger if needed
+  });
+}
+
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
   if (!sig)
@@ -239,6 +296,9 @@ export async function POST(req: NextRequest) {
         if (meta.booking_id) {
           await setBookingStatus(db, meta.booking_id, "CONFIRMED");
         }
+
+        // Mint sales rep commission if this provider was referred
+        await mintBookingCommission(db, meta.provider_id, pi.id, amount);
         break;
       }
 

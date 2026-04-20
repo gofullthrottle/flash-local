@@ -30,4 +30,5 @@ What becomes easier or more difficult because of this change?
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| - | No ADRs yet | - |
+| 0001 | [Sales Rep Attribution & Field Sales Model](0001-sales-rep-attribution.md) | Accepted |
+| 0002 | [Commission Ledger & Payout Design](0002-commission-ledger.md) | Accepted |
